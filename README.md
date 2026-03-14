@@ -276,6 +276,16 @@ php-lsp-docker-claude-code/
 - [zircote/lsp-tools](https://github.com/zircote/lsp-tools) and [zircote/lsp-marketplace](https://github.com/zircote/lsp-marketplace) by zircote — inspiration for plugin structure, hooks patterns, and marketplace schema
 - [claude-code-lsps](https://github.com/Piebald-AI/claude-code-lsps) by Piebald-AI — LSP plugin system reference
 
+## Changelog
+
+### 2026-03-14 — Dropped Intelephense from combined plugin; PHPantom only
+
+After extended debugging, Intelephense was found to call `process.exit(1)` unconditionally after every workspace index completes — a bug reproducible across versions 1.10.4 through 1.17.3-beta. The crash fires even when the workspace is excluded (`files.exclude: ["**"]`) because Intelephense also indexes its built-in PHP stubs, and the exit handler fires when that internal scan finishes regardless of workspace content or configuration.
+
+The `php-combined-docker` multiplexer was removed. PHPantom (`phpantom-docker`) is now the recommended and only active plugin. It covers all use cases previously provided by the combined setup: completion, go-to-definition, hover, diagnostics, rename, auto-import, and Laravel/Eloquent support — with lower RAM usage and near-instant startup.
+
+---
+
 ## License
 
 Personal Use / Non-Commercial — see [LICENSE](LICENSE) for full terms.
