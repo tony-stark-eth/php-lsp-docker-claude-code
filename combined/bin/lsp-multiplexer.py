@@ -354,8 +354,8 @@ def _start_server(image, workspace, uid_gid):
         [
             "docker", "run", "--rm", "--interactive",
             "--user", uid_gid,
-            "--volume", f"{workspace}:/workspace:ro",
-            "--workdir", "/workspace",
+            "--volume", f"{workspace}:{workspace}:ro",
+            "--workdir", workspace,
             image,
         ],
         stdin=subprocess.PIPE,

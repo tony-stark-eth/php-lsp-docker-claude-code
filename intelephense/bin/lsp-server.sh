@@ -31,6 +31,6 @@ exec docker run \
   --rm \
   --interactive \
   --user "$(id -u):$(id -g)" \
-  --volume "${PWD}:/workspace:ro" \
-  --workdir "/workspace" \
+  --volume "${PWD}:${PWD}:ro" \
+  --workdir "${PWD}" \
   "$IMAGE_NAME"
