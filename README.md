@@ -2,20 +2,23 @@
 
 Run **Intelephense** (free tier) and **[PHPantom](https://github.com/AJenbo/phpantom_lsp)** as Claude Code LSP servers via Docker — no local PHP toolchain required.
 
-| Feature                | Intelephense (free) |              PHPantom |
-|------------------------|---------------------|----------------------:|
-| Completion             | ✅                   |                     ✅ |
-| Go-to-definition       | ✅                   |                     ✅ |
-| Hover                  | ✅                   |            🚧 partial |
-| Find references        | ✅                   |             ❌ roadmap |
-| Diagnostics            | ✅                   |             ❌ roadmap |
-| Auto-import            | ❌ paid              |                     ✅ |
-| Laravel Eloquent       | ❌                   |                     ✅ |
-| Startup time           | ~5 s                |             **10 ms** |
-| RAM usage              | ~520 MB             |              **7 MB** |
-| Build time (first run) | ~30 s               | ~2 min (Rust compile) |
+| Feature                | Intelephense (free) |              PHPantom |              Combined |
+|------------------------|---------------------|----------------------:|----------------------:|
+| Completion             | ✅                   |                     ✅ |              ✅ merged |
+| Go-to-definition       | ✅                   |                     ✅ |              ✅ merged |
+| Hover                  | ✅                   |            🚧 partial |                     ✅ |
+| Find references        | ✅                   |             ❌ roadmap |                     ✅ |
+| Diagnostics            | ✅                   |             ❌ roadmap |                     ✅ |
+| Auto-import            | ❌ paid              |                     ✅ |                     ✅ |
+| Laravel Eloquent       | ❌                   |                     ✅ |                     ✅ |
+| Startup time           | ~5 s                |             **10 ms** |                  ~5 s |
+| RAM usage              | ~520 MB             |              **7 MB** |               ~527 MB |
+| Build time (first run) | ~30 s               | ~2 min (Rust compile) | ~2 min (in parallel)  |
 
-> **Which should I use?** Use **PHPantom** for raw speed on large codebases and Laravel projects. Use **Intelephense** when you need diagnostics or find-references.
+> **Which should I use?**
+> - **Combined** (`php-combined-docker`) — best results; runs both servers and merges responses via a Python multiplexer. Recommended if you don't mind the extra RAM.
+> - **PHPantom** — ultra-low RAM and instant startup; great for large codebases and Laravel projects.
+> - **Intelephense** — reliable diagnostics and find-references on its own.
 
 ---
 
@@ -64,7 +67,10 @@ npx tweakcc --apply
 
 1. Tab to **Marketplaces**
 2. Enter `php-lsp-docker-claude-code` → **Browse plugins**
-3. Select `intelephense-docker` and/or `phpantom-docker` with `Space`
+3. Select one of the three plugins with `Space`:
+   - `php-combined-docker` — both servers, merged results (recommended)
+   - `intelephense-docker` — Intelephense only
+   - `phpantom-docker` — PHPantom only
 4. Press `i` to install
 5. Restart Claude Code
 

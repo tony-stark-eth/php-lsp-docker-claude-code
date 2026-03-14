@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-smoke-test:
+    name: Build images & LSP smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Build images ────────────────────────────────────────────────────────
+
+      - name: Build Intelephense image
+        run: docker build --tag claude-code-lsp-intelephense ./intelephense
+
+      - name: Build PHPantom image
+        run: docker build --tag claude-code-lsp-phpantom ./phpantom
+
+      # ── LSP smoke tests ─────────────────────────────────────────────────────
+      # Send a minimal LSP initialize request and assert we get a valid response.
+      # The helper script writes Content-Length framed JSON to stdin, reads the
+      # response, and exits non-zero if it doesn't look like a proper result.
+
+      - name: Smoke test — Intelephense initialize
+        run: python3 .github/scripts/lsp_smoke_test.py intelephense
+
+      - name: Smoke test — PHPantom initialize
+        run: python3 .github/scripts/lsp_smoke_test.py phpantom
+
+      - name: Smoke test — combined multiplexer initialize
+        run: python3 .github/scripts/lsp_smoke_test.py combined
