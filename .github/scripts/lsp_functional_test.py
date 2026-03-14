@@ -8,8 +8,10 @@ completes. Sending requests right after didOpen (no sleep) is both faster
 and avoids the ~4s crash that happens when indexing finishes.
 
 Sequence:
-  initialize → initialized → didOpen
-    → completion + hover (sent immediately, no wait)
+  initialize → initialized
+    → didOpen(test.php)             → completion + hover
+    → didOpen(test_implementation.php) → textDocument/implementation
+                                        (phpantom + combined only)
   → shutdown → exit
 
 Usage:
@@ -17,9 +19,13 @@ Usage:
   python3 lsp_functional_test.py phpantom
   python3 lsp_functional_test.py combined
 
-Positions in fixtures/test.php (0-indexed):
-  Completion : line 25, char 15  — right after "$greeter->"
-  Hover      : line 4,  char 8   — inside "class Greeter"
+Fixture positions (0-indexed):
+  test.php
+    Completion : line 25, char 15  — right after "$greeter->"
+    Hover      : line 4,  char 8   — inside "class Greeter"
+  test_implementation.php
+    Implementation : line 6, char 20 — inside "greet" in interface Greetable
+                     expected result → line 11 (Greeter::greet implementation)
 """
 
 import json
@@ -32,15 +38,15 @@ import time
 
 ENCODING = "utf-8"
 
-SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT    = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-FIXTURE_DIR  = os.path.join(SCRIPT_DIR, "fixtures")
-FIXTURE_FILE = os.path.join(FIXTURE_DIR, "test.php")
+SCRIPT_DIR       = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT        = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+FIXTURE_DIR      = os.path.join(SCRIPT_DIR, "fixtures")
+FIXTURE_FILE     = os.path.join(FIXTURE_DIR, "test.php")
+FIXTURE_IMPL     = os.path.join(FIXTURE_DIR, "test_implementation.php")
 
-# All plugins mount FIXTURE_DIR as /workspace so only test.php is visible.
-# This keeps Intelephense from indexing the whole repo (which would crash it).
-ROOT_URI = "file:///workspace"
-FILE_URI = "file:///workspace/test.php"
+ROOT_URI      = "file:///workspace"
+FILE_URI      = "file:///workspace/test.php"
+IMPL_FILE_URI = "file:///workspace/test_implementation.php"
 
 REQUEST_TIMEOUT = 30
 
@@ -109,6 +115,23 @@ def wait_for_id(msg_queue: queue.Queue, req_id: int, label: str) -> dict | None:
     return None
 
 
+def wait_for_ids(msg_queue: queue.Queue, ids: set, label: str) -> dict:
+    """Collect responses for multiple request ids. Returns {id: response}."""
+    results = {}
+    deadline = time.monotonic() + REQUEST_TIMEOUT
+    while time.monotonic() < deadline and len(results) < len(ids):
+        remaining = max(0.1, deadline - time.monotonic())
+        try:
+            msg = msg_queue.get(timeout=min(remaining, 1.0))
+        except queue.Empty:
+            continue
+        if msg is None:
+            break
+        if msg.get("id") in ids:
+            results[msg["id"]] = msg
+    return results
+
+
 # ── Server startup ────────────────────────────────────────────────────────────
 
 def start_server(plugin: str) -> subprocess.Popen:
@@ -140,7 +163,6 @@ def start_server(plugin: str) -> subprocess.Popen:
         return subprocess.Popen(
             ["bash", script],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            # cwd=FIXTURE_DIR so the multiplexer uses it as workspace for Docker mounts
             cwd=FIXTURE_DIR,
         )
 
@@ -196,13 +218,45 @@ def check_completion(result, plugin: str) -> None:
 
 def check_hover(result, plugin: str) -> None:
     if result is None:
-        # null is a valid LSP response; warn but don't fail
         print(f"[functional] {plugin} hover: WARN — null (cursor may be off-symbol)",
               flush=True)
         return
     if not result.get("contents"):
         _fail(plugin, "hover", f"expected 'contents' in result, got: {result!r}")
     print(f"[functional] {plugin} hover: OK", flush=True)
+
+
+def check_implementation(result, plugin: str) -> None:
+    """
+    PHPantom returns a Location or Location[] for textDocument/implementation.
+    From the interface method (line 6) it should point to the implementing
+    class method (line 11) in test_implementation.php.
+
+    Intelephense does not support this feature — callers should skip it.
+    The combined plugin should return PHPantom's result via the multiplexer.
+    """
+    if result is None:
+        _fail(plugin, "implementation", "null result — PHPantom should return a location")
+
+    # Normalise to a list (PHPantom may return a single Location or a list)
+    locations = result if isinstance(result, list) else [result]
+    if not locations:
+        _fail(plugin, "implementation", "empty location list")
+
+    # Verify at least one location points to the expected file
+    uris = [loc.get("uri", "") for loc in locations if isinstance(loc, dict)]
+    if not any("test_implementation.php" in uri for uri in uris):
+        _fail(plugin, "implementation",
+              f"expected uri containing test_implementation.php, got: {uris!r}")
+
+    # PHPantom should point to the implementing method at line 11
+    lines = [loc.get("range", {}).get("start", {}).get("line") for loc in locations]
+    if 11 not in lines:
+        _fail(plugin, "implementation",
+              f"expected implementation at line 11 (Greeter::greet), got lines: {lines!r}")
+
+    print(f"[functional] {plugin} implementation: OK — "
+          f"found {len(locations)} location(s) at line(s) {lines}", flush=True)
 
 
 def _fail(plugin: str, test: str, reason: str) -> None:
@@ -236,6 +290,7 @@ def main() -> None:
                 "textDocument": {
                     "completion": {"completionItem": {"snippetSupport": True}, "contextSupport": True},
                     "hover": {"contentFormat": ["markdown", "plaintext"]},
+                    "implementation": {"dynamicRegistration": False},
                     "publishDiagnostics": {},
                 }
             },
@@ -253,20 +308,17 @@ def main() -> None:
     # 2 ── initialized ────────────────────────────────────────────────────────
     proc.stdin.write(encode({"jsonrpc": "2.0", "method": "initialized", "params": {}}))
 
-    # 3 ── didOpen ────────────────────────────────────────────────────────────
+    # 3 ── didOpen(test.php) + completion + hover ──────────────────────────────
     with open(FIXTURE_FILE) as f:
         php_source = f.read()
 
     proc.stdin.write(encode({
         "jsonrpc": "2.0", "method": "textDocument/didOpen",
-        "params": {
-            "textDocument": {
-                "uri": FILE_URI, "languageId": "php", "version": 1, "text": php_source,
-            }
-        },
+        "params": {"textDocument": {
+            "uri": FILE_URI, "languageId": "php", "version": 1, "text": php_source,
+        }},
     }))
 
-    # 4 ── completion (sent immediately — servers answer from didOpen text) ───
     # Line 25: "echo $greeter->greet();"  char 15 = right after "->"
     comp_id = req_id
     proc.stdin.write(encode({
@@ -279,7 +331,6 @@ def main() -> None:
     }))
     req_id += 1
 
-    # 5 ── hover (also sent immediately) ─────────────────────────────────────
     # Line 4: "class Greeter"  char 8 = inside "Greeter"
     hover_id = req_id
     proc.stdin.write(encode({
@@ -290,22 +341,46 @@ def main() -> None:
         },
     }))
     req_id += 1
+
+    # 4 ── didOpen(test_implementation.php) + implementation ───────────────────
+    # This test only applies to PHPantom and combined (multiplexer must route
+    # PHPantom's result through even when Intelephense returns null).
+    with open(FIXTURE_IMPL) as f:
+        impl_source = f.read()
+
+    proc.stdin.write(encode({
+        "jsonrpc": "2.0", "method": "textDocument/didOpen",
+        "params": {"textDocument": {
+            "uri": IMPL_FILE_URI, "languageId": "php", "version": 1, "text": impl_source,
+        }},
+    }))
+
+    impl_id = None
+    if plugin in ("phpantom", "combined"):
+        impl_id = req_id
+        # Line 6, char 20 = inside "greet" in the Greetable interface
+        # Expected: location pointing to Greeter::greet() at line 11
+        proc.stdin.write(encode({
+            "jsonrpc": "2.0", "id": impl_id, "method": "textDocument/implementation",
+            "params": {
+                "textDocument": {"uri": IMPL_FILE_URI},
+                "position": {"line": 6, "character": 20},
+            },
+        }))
+        req_id += 1
+
     proc.stdin.flush()
 
-    # Collect both responses from the queue
-    comp_resp = hover_resp = None
-    deadline = time.monotonic() + REQUEST_TIMEOUT
-    while time.monotonic() < deadline and not (comp_resp and hover_resp):
-        try:
-            msg = msg_queue.get(timeout=1.0)
-        except queue.Empty:
-            continue
-        if msg is None:
-            break
-        if msg.get("id") == comp_id:
-            comp_resp = msg
-        elif msg.get("id") == hover_id:
-            hover_resp = msg
+    # Collect completion + hover responses
+    wanted = {comp_id, hover_id}
+    if impl_id is not None:
+        wanted.add(impl_id)
+
+    responses = wait_for_ids(msg_queue, wanted, plugin)
+
+    comp_resp  = responses.get(comp_id)
+    hover_resp = responses.get(hover_id)
+    impl_resp  = responses.get(impl_id) if impl_id is not None else None
 
     if comp_resp and "error" in comp_resp:
         _fail(plugin, "completion", f"server error: {comp_resp['error']}")
@@ -315,7 +390,12 @@ def main() -> None:
         _fail(plugin, "hover", f"server error: {hover_resp['error']}")
     check_hover(hover_resp.get("result") if hover_resp else None, plugin)
 
-    # 6 ── shutdown ────────────────────────────────────────────────────────────
+    if impl_id is not None:
+        if impl_resp and "error" in impl_resp:
+            _fail(plugin, "implementation", f"server error: {impl_resp['error']}")
+        check_implementation(impl_resp.get("result") if impl_resp else None, plugin)
+
+    # 5 ── shutdown ────────────────────────────────────────────────────────────
     shutdown(proc, req_id)
     print(f"[functional] {plugin}: all tests passed", flush=True)
 
