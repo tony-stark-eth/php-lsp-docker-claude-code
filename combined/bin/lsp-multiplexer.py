@@ -4,14 +4,16 @@ PHP LSP multiplexer — fans out client requests to Intelephense + PHPantom
 and merges their responses so Claude Code gets the best of both servers.
 
 Merge strategy:
-  initialize            merge ServerCapabilities (union of features)
-  completion            concatenate item lists from both servers
-  definition/references concatenate Location arrays
-  hover                 prefer Intelephense (richer doc strings)
-  signatureHelp         prefer whichever has signatures
-  codeAction/docSymbol  concatenate lists
-  diagnostics (notif)   merge per-URI whenever either server publishes
-  everything else       prefer Intelephense, fall back to PHPantom
+  initialize              merge ServerCapabilities (union of features)
+  completion              concatenate item lists (PHPantom first)
+  definition/declaration  concatenate Location arrays (PHPantom first)
+  references              wait for both, then concatenate (completeness)
+  workspace/symbol        wait for both, then concatenate (completeness)
+  hover                   PHPantom first (fully supported), Intelephense fallback
+  signatureHelp           prefer whichever has signatures
+  codeAction/docSymbol    concatenate lists
+  diagnostics (notif)     merge per-URI from both servers
+  everything else         PHPantom wins immediately, Intelephense discarded
 """
 
 import json
@@ -131,7 +133,7 @@ def merge_results(method, r_phantom, r_intel):
         return _to_list(r_phantom) + _to_list(r_intel)
 
     if method == "textDocument/hover":
-        # PHPantom preferred; fall back to Intelephense
+        # PHPantom fully supports hover; Intelephense is the fallback
         return r_phantom if r_phantom is not None else r_intel
 
     if method == "textDocument/signatureHelp":
@@ -158,9 +160,15 @@ class Multiplexer:
         with self._write_lock:
             write_message(sys.stdout.buffer, msg)
 
-    # Methods where we must wait for both servers before responding,
-    # because merging both results is essential (e.g. capability negotiation).
-    _WAIT_FOR_BOTH = frozenset({"initialize"})
+    # Methods where we must wait for both servers before responding.
+    # Used when completeness matters more than speed — e.g. references where
+    # both servers may find different call sites, or workspace symbols where
+    # PHPantom is partial and Intelephense fills the gaps.
+    _WAIT_FOR_BOTH = frozenset({
+        "initialize",              # capabilities must be merged from both
+        "textDocument/references", # both servers find different call sites
+        "workspace/symbol",        # PHPantom partial; Intelephense fills gaps
+    })
 
     def _handle_server_message(self, msg, server_idx):
         """Called from per-server reader threads."""
