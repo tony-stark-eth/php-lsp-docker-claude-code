@@ -27,7 +27,6 @@ Run **Intelephense** (free tier) and **[PHPantom](https://github.com/AJenbo/phpa
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine on Linux) — **running**
 - [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) **v2.1.50+**
-- `npx tweakcc --apply` applied (required for LSP plugin loading — see [tweakcc](https://github.com/Piebald-AI/tweakcc))
 
 ---
 
@@ -48,13 +47,7 @@ bash setup.sh
 
 This makes the wrapper scripts executable and optionally pre-builds the Docker images.
 
-### 3. Patch Claude Code (required once)
-
-```bash
-npx tweakcc --apply
-```
-
-### 4. Register the marketplace in Claude Code
+### 3. Register the marketplace in Claude Code
 
 ```text
 /plugin marketplace add tony-stark-eth/php-lsp-docker-claude-code
@@ -131,9 +124,9 @@ chmod +x intelephense/bin/lsp-server.sh phpantom/bin/lsp-server.sh
 
 ### "No LSP server available for file type: .php"
 
-- Make sure you ran `npx tweakcc --apply`.
 - Restart Claude Code after installing the plugin.
 - Check the `/plugin` Errors tab inside Claude Code.
+- On older Claude Code versions (&lt;v2.1.50) you may need `npx tweakcc --apply` to enable LSP plugin support.
 
 ### PHPantom build fails
 
@@ -177,7 +170,7 @@ php-lsp-docker-claude-code/
 
 - [Intelephense](https://intelephense.com/) by Ben Mewburn — MIT licensed npm package (free tier)
 - [PHPantom](https://github.com/AJenbo/phpantom_lsp) by AJenbo — MIT licensed, ultra-fast Rust PHP LSP
-- [tweakcc](https://github.com/Piebald-AI/tweakcc) / [claude-code-lsps](https://github.com/Piebald-AI/claude-code-lsps) by Piebald-AI — LSP plugin system reference
+- [claude-code-lsps](https://github.com/Piebald-AI/claude-code-lsps) by Piebald-AI — LSP plugin system reference
 
 ## License
 
