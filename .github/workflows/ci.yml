@@ -83,3 +83,19 @@ jobs:
 
       - name: Smoke test — combined multiplexer initialize
         run: python3 .github/scripts/lsp_smoke_test.py combined
+
+      # ── Functional tests ─────────────────────────────────────────────────────
+      # Open a real PHP file, request completions at $greeter-> and hover on
+      # the Greeter class, then assert the servers return meaningful results.
+
+      - name: Functional test — Intelephense (completion + hover)
+        run: python3 .github/scripts/lsp_functional_test.py intelephense
+        timeout-minutes: 3
+
+      - name: Functional test — PHPantom (completion + hover)
+        run: python3 .github/scripts/lsp_functional_test.py phpantom
+        timeout-minutes: 2
+
+      - name: Functional test — combined (completion + hover)
+        run: python3 .github/scripts/lsp_functional_test.py combined
+        timeout-minutes: 3
