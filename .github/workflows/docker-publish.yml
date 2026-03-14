@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      - "intelephense/Dockerfile"
       - "phpantom/Dockerfile"
   schedule:
     - cron: "0 3 * * 1"   # every Monday at 03:00 UTC (picks up upstream changes)
@@ -26,8 +25,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: intelephense
-            context: ./intelephense
           - image: phpantom
             context: ./phpantom
 

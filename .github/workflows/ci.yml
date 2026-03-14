@@ -20,9 +20,7 @@ jobs:
         run: |
           for f in \
             .claude-plugin/marketplace.json \
-            intelephense/.lsp.json intelephense/plugin.json intelephense/hooks/hooks.json \
-            phpantom/.lsp.json phpantom/plugin.json phpantom/hooks/hooks.json \
-            combined/.lsp.json combined/plugin.json combined/hooks/hooks.json; do
+            phpantom/.lsp.json phpantom/plugin.json phpantom/hooks/hooks.json; do
             echo "Checking $f..."
             python3 -m json.tool "$f" > /dev/null
           done
@@ -30,10 +28,10 @@ jobs:
 
       - name: Check required files exist
         run: |
-          for plugin in intelephense phpantom combined; do
-            test -f "$plugin/.lsp.json"     || (echo "Missing $plugin/.lsp.json" && exit 1)
-            test -f "$plugin/plugin.json"   || (echo "Missing $plugin/plugin.json" && exit 1)
-            test -f "$plugin/hooks/hooks.json" || (echo "Missing $plugin/hooks/hooks.json" && exit 1)
+          for plugin in phpantom; do
+            test -f "$plugin/.lsp.json"         || (echo "Missing $plugin/.lsp.json" && exit 1)
+            test -f "$plugin/plugin.json"       || (echo "Missing $plugin/plugin.json" && exit 1)
+            test -f "$plugin/hooks/hooks.json"  || (echo "Missing $plugin/hooks/hooks.json" && exit 1)
             test -f "$plugin/bin/lsp-server.sh" || (echo "Missing $plugin/bin/lsp-server.sh" && exit 1)
           done
           echo "All required files present"
@@ -44,7 +42,7 @@ jobs:
           globs: "**/*.md"
 
   build-and-smoke-test:
-    name: Build images & LSP smoke test
+    name: Build image & LSP smoke test
     runs-on: ubuntu-latest
 
     steps:
@@ -52,17 +50,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      # ── Build images (GHA layer cache so Rust compilation is skipped on repeat runs)
-
-      - name: Build Intelephense image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./intelephense
-          tags: claude-code-lsp-intelephense
-          load: true
-          cache-from: type=gha,scope=intelephense
-          cache-to: type=gha,scope=intelephense,mode=max
 
       - name: Build PHPantom image
         uses: docker/build-push-action@v6
@@ -73,42 +60,8 @@ jobs:
           cache-from: type=gha,scope=phpantom
           cache-to: type=gha,scope=phpantom,mode=max
 
-      # ── LSP smoke tests ─────────────────────────────────────────────────────
-      # Send a minimal LSP initialize request and assert we get a valid response.
-      # The helper script writes Content-Length framed JSON to stdin, reads the
-      # response, and exits non-zero if it doesn't look like a proper result.
-
-      - name: Smoke test — Intelephense initialize
-        run: python3 .github/scripts/lsp_smoke_test.py intelephense
-
       - name: Smoke test — PHPantom initialize
         run: python3 .github/scripts/lsp_smoke_test.py phpantom
 
-      - name: Smoke test — combined multiplexer initialize
-        run: python3 .github/scripts/lsp_smoke_test.py combined
-
-      # ── Multiplexer regression tests ─────────────────────────────────────────
-      # Verifies bug fixes for server-initiated request handling and null-result
-      # hang in the combined plugin multiplexer.
-
-      - name: Multiplexer regression tests (bug 1 + bug 2)
-        run: python3 .github/scripts/lsp_multiplexer_test.py
-
-      # ── Functional tests ─────────────────────────────────────────────────────
-      # Open a real PHP file, request completions at $greeter-> and hover on
-      # the Greeter class. Requests are sent immediately after didOpen —
-      # servers answer from the supplied text without needing to index first.
-      # Each step is independent (continue-on-error) so a single failure
-      # doesn't skip the remaining plugins.
-
-      - name: Functional test — Intelephense (completion + hover)
-        continue-on-error: false
-        run: python3 .github/scripts/lsp_functional_test.py intelephense
-
-      - name: Functional test — PHPantom (completion + hover)
-        continue-on-error: false
+      - name: Functional test — PHPantom (completion + hover + implementation)
         run: python3 .github/scripts/lsp_functional_test.py phpantom
-
-      - name: Functional test — combined (completion + hover)
-        continue-on-error: false
-        run: python3 .github/scripts/lsp_functional_test.py combined

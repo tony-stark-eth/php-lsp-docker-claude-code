@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """
-LSP smoke test — starts one of the three plugin servers, sends an
-initialize request, and verifies the response contains ServerCapabilities.
+LSP smoke test — starts the PHPantom server, sends an initialize request,
+and verifies the response contains ServerCapabilities.
 
 Usage:
-  python3 lsp_smoke_test.py intelephense
   python3 lsp_smoke_test.py phpantom
-  python3 lsp_smoke_test.py combined
 """
 
 import json
@@ -77,20 +75,6 @@ def start_server(plugin):
     uid_gid = f"{os.getuid()}:{os.getgid()}"
     workspace = repo_root
 
-    if plugin == "intelephense":
-        return subprocess.Popen(
-            [
-                "docker", "run", "--rm", "--interactive",
-                "--user", uid_gid,
-                "--volume", f"{workspace}:/workspace:ro",
-                "--workdir", "/workspace",
-                "claude-code-lsp-intelephense",
-            ],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
     if plugin == "phpantom":
         return subprocess.Popen(
             [
@@ -103,16 +87,6 @@ def start_server(plugin):
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-        )
-
-    if plugin == "combined":
-        script = os.path.join(repo_root, "combined", "bin", "lsp-server.sh")
-        return subprocess.Popen(
-            ["bash", script],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=workspace,
         )
 
     raise ValueError(f"Unknown plugin: {plugin}")
@@ -129,8 +103,8 @@ def drain_stderr(proc, label):
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in ("intelephense", "phpantom", "combined"):
-        print("Usage: lsp_smoke_test.py intelephense|phpantom|combined", file=sys.stderr)
+    if len(sys.argv) != 2 or sys.argv[1] != "phpantom":
+        print("Usage: lsp_smoke_test.py phpantom", file=sys.stderr)
         sys.exit(1)
 
     plugin = sys.argv[1]
