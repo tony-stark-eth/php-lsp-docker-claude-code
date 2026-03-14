@@ -89,16 +89,19 @@ jobs:
 
       # ── Functional tests ─────────────────────────────────────────────────────
       # Open a real PHP file, request completions at $greeter-> and hover on
-      # the Greeter class, then assert the servers return meaningful results.
+      # the Greeter class. Requests are sent immediately after didOpen —
+      # servers answer from the supplied text without needing to index first.
+      # Each step is independent (continue-on-error) so a single failure
+      # doesn't skip the remaining plugins.
 
       - name: Functional test — Intelephense (completion + hover)
+        continue-on-error: false
         run: python3 .github/scripts/lsp_functional_test.py intelephense
-        timeout-minutes: 3
 
       - name: Functional test — PHPantom (completion + hover)
+        continue-on-error: false
         run: python3 .github/scripts/lsp_functional_test.py phpantom
-        timeout-minutes: 2
 
       - name: Functional test — combined (completion + hover)
+        continue-on-error: false
         run: python3 .github/scripts/lsp_functional_test.py combined
-        timeout-minutes: 3

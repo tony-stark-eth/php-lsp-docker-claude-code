@@ -287,32 +287,42 @@ class Multiplexer:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-def _build_image(name, dockerfile_dir):
+_GHCR = {
+    "claude-code-lsp-intelephense": "ghcr.io/tony-stark-eth/php-lsp-docker-claude-code/intelephense:latest",
+    "claude-code-lsp-phpantom":     "ghcr.io/tony-stark-eth/php-lsp-docker-claude-code/phpantom:latest",
+}
+
+
+def _ensure_image(name, dockerfile_dir):
     label = "Intelephense" if "intelephense" in name else "PHPantom"
-    extra = " (compiles Rust, ~2 min)" if "phpantom" in name else ""
+
+    # Try GHCR pull first (fast, no compilation needed)
+    ghcr = _GHCR.get(name)
+    if ghcr:
+        print(f"[php-lsp-docker] Pulling {label} from GHCR…", file=sys.stderr, flush=True)
+        result = subprocess.run(["docker", "pull", ghcr], capture_output=True)
+        if result.returncode == 0:
+            subprocess.run(["docker", "tag", ghcr, name], check=True, capture_output=True)
+            print(f"[php-lsp-docker] {label} ready (from GHCR).", file=sys.stderr, flush=True)
+            return
+
+    # Fall back to local build
+    extra = " (compiles Rust, ~2 min)" if "phpantom" in name else " (~30s)"
     print(f"[php-lsp-docker] Building {label}{extra}…", file=sys.stderr, flush=True)
     subprocess.run(
-        [
-            "docker", "build",
-            "--tag", name,
-            "--file", os.path.join(dockerfile_dir, "Dockerfile"),
-            dockerfile_dir,
-        ],
-        check=True,
-        stderr=sys.stderr,
+        ["docker", "build", "--tag", name,
+         "--file", os.path.join(dockerfile_dir, "Dockerfile"), dockerfile_dir],
+        check=True, stderr=sys.stderr,
     )
     print(f"[php-lsp-docker] {label} ready.", file=sys.stderr, flush=True)
 
 
 def _ensure_images_parallel(images_and_dirs):
-    """Build any missing images in parallel."""
+    """Pull/build any missing images in parallel."""
     threads = []
     for name, dockerfile_dir in images_and_dirs:
-        result = subprocess.run(
-            ["docker", "image", "inspect", name], capture_output=True
-        )
-        if result.returncode != 0:
-            t = threading.Thread(target=_build_image, args=(name, dockerfile_dir))
+        if subprocess.run(["docker", "image", "inspect", name], capture_output=True).returncode != 0:
+            t = threading.Thread(target=_ensure_image, args=(name, dockerfile_dir))
             t.start()
             threads.append(t)
     for t in threads:

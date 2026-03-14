@@ -4,17 +4,24 @@
 set -euo pipefail
 
 IMAGE_NAME="claude-code-lsp-intelephense"
+GHCR_IMAGE="ghcr.io/tony-stark-eth/php-lsp-docker-claude-code/intelephense:latest"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOCKERFILE_DIR="$(dirname "$SCRIPT_DIR")"
 
-# ── Build image if it doesn't exist yet ────────────────────────────────────────
+# ── Ensure image is available (pull from GHCR, fall back to local build) ──────
 if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
-  echo "[php-lsp-docker] Building Intelephense Docker image (first run)…" >&2
-  docker build \
-    --tag "$IMAGE_NAME" \
-    --file "$DOCKERFILE_DIR/Dockerfile" \
-    "$DOCKERFILE_DIR" >&2
-  echo "[php-lsp-docker] Build complete." >&2
+  echo "[php-lsp-docker] Pulling Intelephense from GHCR…" >&2
+  if docker pull "$GHCR_IMAGE" > /dev/null 2>&1; then
+    docker tag "$GHCR_IMAGE" "$IMAGE_NAME"
+    echo "[php-lsp-docker] Pull complete." >&2
+  else
+    echo "[php-lsp-docker] Pull failed — building locally (first run, ~30s)…" >&2
+    docker build \
+      --tag "$IMAGE_NAME" \
+      --file "$DOCKERFILE_DIR/Dockerfile" \
+      "$DOCKERFILE_DIR" >&2
+    echo "[php-lsp-docker] Build complete." >&2
+  fi
 fi
 
 # ── Run the LSP server ─────────────────────────────────────────────────────────
