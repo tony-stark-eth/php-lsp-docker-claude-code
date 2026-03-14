@@ -7,18 +7,22 @@ Run **Intelephense** (free tier) and **[PHPantom](https://github.com/AJenbo/phpa
 
 Three plugins to choose from:
 
-| Feature                | Intelephense (free) |              PHPantom |                          Combined |
-|------------------------|---------------------|----------------------:|----------------------------------:|
-| Completion             | ✅                   |                     ✅ |                         ✅ merged |
-| Go-to-definition       | ✅                   |                     ✅ |                         ✅ merged |
-| Hover                  | ✅                   |            🚧 partial |                                ✅ |
-| Find references        | ✅                   |             ❌ roadmap |                                ✅ |
-| Diagnostics            | ✅                   |             ❌ roadmap |                                ✅ |
-| Auto-import            | ❌ paid              |                     ✅ |                                ✅ |
-| Laravel Eloquent       | ❌                   |                     ✅ |                                ✅ |
-| Startup time           | ~5 s                |             **10 ms** |                             ~5 s |
-| RAM usage              | ~520 MB             |              **7 MB** |                          ~527 MB |
-| First-run image fetch  | ~30 s pull / build  |           ~30 s pull  |                      ~30 s pull |
+| Feature                | Intelephense (free) |         PHPantom |              Combined |
+|------------------------|---------------------|------------------:|----------------------:|
+| Completion             | ✅                   |               ✅ |             ✅ merged |
+| Go-to-definition       | ✅                   |               ✅ |             ✅ merged |
+| Hover                  | ✅                   |               ✅ |                    ✅ |
+| Find references        | ✅                   |               ✅ |             ✅ merged |
+| Diagnostics            | ✅                   |               ✅ |             ✅ merged |
+| Auto-import            | ❌ paid              |               ✅ |                    ✅ |
+| Rename                 | ❌ paid              |               ✅ |                    ✅ |
+| Go-to-implementation   | ❌ paid              |               ✅ |                    ✅ |
+| Workspace symbols      | ✅                   |       🚧 partial |                    ✅ |
+| Laravel Eloquent       | ❌                   |               ✅ |                    ✅ |
+| Generics / @template   | 🚧 partial           |               ✅ |                    ✅ |
+| Startup time           | ~5 s                |        **< 1 s** |                 ~5 s |
+| RAM usage              | ~520 MB             |      **~21 MB**  |              ~541 MB |
+| First-run image fetch  | ~30 s pull / build  |     ~30 s pull   |          ~30 s pull |
 
 > **Which should I use?**
 >

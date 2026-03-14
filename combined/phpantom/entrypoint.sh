@@ -1,30 +1,30 @@
 #!/bin/sh
-# PHPantom entrypoint — ensures every composer.json directory has a
-# .phpantom.toml with strategy=full so cross-file navigation works
-# (hover, goToDefinition, findReferences) without manual configuration.
+# PHPantom entrypoint — ensures .phpantom.toml with strategy=full exists
+# at the workspace root AND in every composer.json subdirectory, so that
+# hover, goToDefinition, and findReferences all work out of the box.
 #
-# If the user has already created .phpantom.toml in their project,
-# it is never overwritten.
+# Existing .phpantom.toml files are never overwritten.
 
 CONFIG_CONTENT='[indexing]
 strategy = "full"
 '
 
-# Find every directory that contains a composer.json (excluding vendor/)
-# and create .phpantom.toml there if one does not already exist.
+write_config_if_missing() {
+    dir="$1"
+    config="${dir}/.phpantom.toml"
+    if [ ! -f "$config" ] && [ -w "$dir" ]; then
+        printf '%s' "$CONFIG_CONTENT" > "$config"
+    fi
+}
+
+# Always write at the workspace root (PHPantom reads config from here first)
+write_config_if_missing "${PWD}"
+
+# Also write in every composer.json subdirectory (subprojects / monorepos)
 find "${PWD}" -name "composer.json" \
     -not -path "*/vendor/*" \
     -not -path "*/.git/*" | while read -r composer_file; do
-
-    dir=$(dirname "$composer_file")
-    config="${dir}/.phpantom.toml"
-
-    if [ ! -f "$config" ]; then
-        # Only write if the directory is writable (workspace may be :ro)
-        if [ -w "$dir" ]; then
-            printf '%s' "$CONFIG_CONTENT" > "$config"
-        fi
-    fi
+    write_config_if_missing "$(dirname "$composer_file")"
 done
 
 exec phpantom_lsp "$@"
