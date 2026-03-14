@@ -7,8 +7,8 @@ Merge strategy:
   initialize              merge ServerCapabilities (union of features)
   completion              concatenate item lists (PHPantom first)
   definition/declaration  concatenate Location arrays (PHPantom first)
-  references              wait for both, then concatenate (completeness)
-  workspace/symbol        wait for both, then concatenate (completeness)
+  references              PHPantom wins immediately (concatenated if both fast)
+  workspace/symbol        PHPantom wins immediately (Intelephense too slow)
   hover                   PHPantom first (fully supported), Intelephense fallback
   signatureHelp           prefer whichever has signatures
   codeAction/docSymbol    concatenate lists
@@ -161,13 +161,11 @@ class Multiplexer:
             write_message(sys.stdout.buffer, msg)
 
     # Methods where we must wait for both servers before responding.
-    # Used when completeness matters more than speed — e.g. references where
-    # both servers may find different call sites, or workspace symbols where
-    # PHPantom is partial and Intelephense fills the gaps.
+    # Keep this list minimal — waiting for Intelephense (which indexes slowly
+    # and can crash) causes hangs. Only add methods where merging is essential
+    # AND both servers are reliably fast.
     _WAIT_FOR_BOTH = frozenset({
-        "initialize",              # capabilities must be merged from both
-        "textDocument/references", # both servers find different call sites
-        "workspace/symbol",        # PHPantom partial; Intelephense fills gaps
+        "initialize",   # capabilities must be merged from both
     })
 
     def _handle_server_message(self, msg, server_idx):
