@@ -50,13 +50,25 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── Build images ────────────────────────────────────────────────────────
+      # ── Build images (GHA layer cache so Rust compilation is skipped on repeat runs)
 
       - name: Build Intelephense image
-        run: docker build --tag claude-code-lsp-intelephense ./intelephense
+        uses: docker/build-push-action@v6
+        with:
+          context: ./intelephense
+          tags: claude-code-lsp-intelephense
+          load: true
+          cache-from: type=gha,scope=intelephense
+          cache-to: type=gha,scope=intelephense,mode=max
 
       - name: Build PHPantom image
-        run: docker build --tag claude-code-lsp-phpantom ./phpantom
+        uses: docker/build-push-action@v6
+        with:
+          context: ./phpantom
+          tags: claude-code-lsp-phpantom
+          load: true
+          cache-from: type=gha,scope=phpantom
+          cache-to: type=gha,scope=phpantom,mode=max
 
       # ── LSP smoke tests ─────────────────────────────────────────────────────
       # Send a minimal LSP initialize request and assert we get a valid response.

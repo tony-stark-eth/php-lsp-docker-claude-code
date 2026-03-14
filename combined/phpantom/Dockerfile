@@ -16,7 +16,12 @@ RUN git clone --depth 1 --branch "$PHPANTOM_REF" \
 
 WORKDIR /src
 
-# Cache the cargo registry layer
+# Fetch dependencies as a separate layer so they are cached independently
+# of source changes — only re-runs when Cargo.toml/Cargo.lock change.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo fetch
+
+# Build the binary (re-runs only when source or deps change)
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release && \
