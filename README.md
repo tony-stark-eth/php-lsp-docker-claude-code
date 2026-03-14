@@ -170,6 +170,7 @@ php-lsp-docker-claude-code/
 
 - [Intelephense](https://intelephense.com/) by Ben Mewburn — MIT licensed npm package (free tier)
 - [PHPantom](https://github.com/AJenbo/phpantom_lsp) by AJenbo — MIT licensed, ultra-fast Rust PHP LSP
+- [zircote/lsp-tools](https://github.com/zircote/lsp-tools) and [zircote/lsp-marketplace](https://github.com/zircote/lsp-marketplace) by zircote — inspiration for plugin structure, hooks patterns, and marketplace schema
 - [claude-code-lsps](https://github.com/Piebald-AI/claude-code-lsps) by Piebald-AI — LSP plugin system reference
 
 ## License
