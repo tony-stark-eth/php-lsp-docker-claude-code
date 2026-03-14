@@ -355,16 +355,18 @@ def _ensure_images_parallel(images_and_dirs):
         t.join()
 
 
-def _start_server(image, workspace, uid_gid, readonly=True):
+def _start_server(image, workspace, uid_gid, readonly=True, extra_env=None):
     mount = f"{workspace}:{workspace}:ro" if readonly else f"{workspace}:{workspace}"
+    env_args = []
+    for kv in (extra_env or []):
+        env_args += ["--env", kv]
     return subprocess.Popen(
         [
             "docker", "run", "--rm", "--interactive",
             "--user", uid_gid,
             "--volume", mount,
             "--workdir", workspace,
-            image,
-        ],
+        ] + env_args + [image],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=sys.stderr,
@@ -384,7 +386,7 @@ if __name__ == "__main__":
     workspace = os.getcwd()
     uid_gid = f"{os.getuid()}:{os.getgid()}"
 
-    proc1 = _start_server("claude-code-lsp-intelephense", workspace, uid_gid, readonly=True)
+    proc1 = _start_server("claude-code-lsp-intelephense", workspace, uid_gid, readonly=True, extra_env=["HOME=/tmp"])
     proc2 = _start_server("claude-code-lsp-phpantom",     workspace, uid_gid, readonly=False)
 
     def _shutdown(signum, frame):
