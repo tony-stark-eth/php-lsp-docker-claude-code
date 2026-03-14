@@ -1,5 +1,5 @@
 # ── Stage 1: Build phpantom_lsp from source ───────────────────────────────────
-FROM rust:1.87-slim AS builder
+FROM rust:slim AS builder
 
 # Install build dependencies (needed for the mago PHP parser and build scripts)
 RUN apt-get update && apt-get install -y \

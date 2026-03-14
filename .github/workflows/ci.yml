@@ -39,7 +39,6 @@ jobs:
         uses: DavidAnson/markdownlint-cli2-action@v19
         with:
           globs: "**/*.md"
-          config: '{"default":true,"MD013":false,"MD033":false}'
 
   build-and-smoke-test:
     name: Build images & LSP smoke test
