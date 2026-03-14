@@ -87,6 +87,13 @@ jobs:
       - name: Smoke test — combined multiplexer initialize
         run: python3 .github/scripts/lsp_smoke_test.py combined
 
+      # ── Multiplexer regression tests ─────────────────────────────────────────
+      # Verifies bug fixes for server-initiated request handling and null-result
+      # hang in the combined plugin multiplexer.
+
+      - name: Multiplexer regression tests (bug 1 + bug 2)
+        run: python3 .github/scripts/lsp_multiplexer_test.py
+
       # ── Functional tests ─────────────────────────────────────────────────────
       # Open a real PHP file, request completions at $greeter-> and hover on
       # the Greeter class. Requests are sent immediately after didOpen —

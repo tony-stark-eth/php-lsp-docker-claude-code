@@ -175,11 +175,28 @@ class Multiplexer:
                 self._write_to_client(msg)
             return
 
+        # Server-initiated request (has BOTH id AND method, e.g.
+        # window/workDoneProgress/create, window/showMessageRequest).
+        # Bug fix: previously these fell through both conditions and were
+        # silently dropped. Now we:
+        #   1. Immediately ack the server with null so it is not left hanging.
+        #   2. Forward to the client as a plain notification (no id) so the
+        #      UI can react (e.g. show a progress indicator).
+        if msg_id is not None and method:
+            try:
+                write_message(self._procs[server_idx].stdin,
+                              {"jsonrpc": "2.0", "id": msg_id, "result": None})
+            except BrokenPipeError:
+                pass
+            notification = {k: v for k, v in msg.items() if k != "id"}
+            self._write_to_client(notification)
+            return
+
         # Response to a client request (has id, no method key)
         if msg_id is not None and "method" not in msg:
             with self._pending_lock:
                 if msg_id not in self._pending:
-                    # Unexpected (e.g. server-initiated request) — pass through
+                    # Unexpected — pass through
                     self._write_to_client(msg)
                     return
 
@@ -194,13 +211,16 @@ class Multiplexer:
                 elif "error" in msg:
                     entry["errors"][server_idx] = msg["error"]
 
-                # PHPantom (idx=1) wins immediately when it has a non-null result,
-                # unless this method requires both responses to merge correctly.
-                phantom_result = entry["results"].get(1)
-                both_responded = entry["received"] >= 2
-                wait_for_both  = entry["method"] in self._WAIT_FOR_BOTH
+                # Bug fix: use key-presence check instead of None check.
+                # entry["results"].get(1) returns Python None for BOTH
+                # "PHPantom has not responded yet" and "PHPantom responded
+                # with JSON null". Checking `1 in entry["results"]` correctly
+                # distinguishes the two cases.
+                phantom_responded = (1 in entry["results"] or 1 in entry["errors"])
+                both_responded    = entry["received"] >= 2
+                wait_for_both     = entry["method"] in self._WAIT_FOR_BOTH
 
-                if (phantom_result is not None and not wait_for_both) or both_responded:
+                if (phantom_responded and not wait_for_both) or both_responded:
                     entry["resolved"] = True
                     del self._pending[msg_id]
                 else:
@@ -345,6 +365,8 @@ def _start_server(image, workspace, uid_gid):
 
 
 if __name__ == "__main__":
+    import signal
+
     plugin_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     _ensure_images_parallel([
@@ -357,6 +379,18 @@ if __name__ == "__main__":
 
     proc1 = _start_server("claude-code-lsp-intelephense", workspace, uid_gid)
     proc2 = _start_server("claude-code-lsp-phpantom",     workspace, uid_gid)
+
+    def _shutdown(signum, frame):
+        """Kill both Docker containers on SIGTERM/SIGINT so they don't linger."""
+        for p in (proc1, proc2):
+            try:
+                p.kill()
+            except Exception:
+                pass
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT,  _shutdown)
 
     Multiplexer(proc1, proc2).run()
 
