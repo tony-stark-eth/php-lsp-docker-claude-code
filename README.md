@@ -2,18 +2,18 @@
 
 Run **Intelephense** (free tier) and **[PHPantom](https://github.com/AJenbo/phpantom_lsp)** as Claude Code LSP servers via Docker — no local PHP toolchain required.
 
-| Feature | Intelephense (free) | PHPantom |
-|---------|--------------------|---------:|
-| Completion | ✅ | ✅ |
-| Go-to-definition | ✅ | ✅ |
-| Hover | ✅ | 🚧 partial |
-| Find references | ✅ | ❌ roadmap |
-| Diagnostics | ✅ | ❌ roadmap |
-| Auto-import | ❌ paid | ✅ |
-| Laravel Eloquent | ❌ | ✅ |
-| Startup time | ~5 s | **10 ms** |
-| RAM usage | ~520 MB | **7 MB** |
-| Build time (first run) | ~30 s | ~2 min (Rust compile) |
+| Feature                | Intelephense (free) |              PHPantom |
+|------------------------|---------------------|----------------------:|
+| Completion             | ✅                   |                     ✅ |
+| Go-to-definition       | ✅                   |                     ✅ |
+| Hover                  | ✅                   |            🚧 partial |
+| Find references        | ✅                   |             ❌ roadmap |
+| Diagnostics            | ✅                   |             ❌ roadmap |
+| Auto-import            | ❌ paid              |                     ✅ |
+| Laravel Eloquent       | ❌                   |                     ✅ |
+| Startup time           | ~5 s                |             **10 ms** |
+| RAM usage              | ~520 MB             |              **7 MB** |
+| Build time (first run) | ~30 s               | ~2 min (Rust compile) |
 
 > **Which should I use?** Use **PHPantom** for raw speed on large codebases and Laravel projects. Use **Intelephense** when you need diagnostics or find-references.
 
@@ -32,7 +32,7 @@ Run **Intelephense** (free tier) and **[PHPantom](https://github.com/AJenbo/phpa
 ### 1. Clone this repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/php-lsp-docker-claude-code.git
+git clone https://github.com/tony-stark-eth/php-lsp-docker-claude-code.git
 cd php-lsp-docker-claude-code
 ```
 
@@ -53,7 +53,7 @@ npx tweakcc --apply
 ### 4. Register the marketplace in Claude Code
 
 ```
-/plugin marketplace add YOUR_USERNAME/php-lsp-docker-claude-code
+/plugin marketplace add tony-stark-eth/php-lsp-docker-claude-code
 ```
 
 ### 5. Install a plugin
