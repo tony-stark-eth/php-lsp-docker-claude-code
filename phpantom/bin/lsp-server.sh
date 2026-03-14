@@ -29,6 +29,6 @@ exec docker run \
   --rm \
   --interactive \
   --user "$(id -u):$(id -g)" \
-  --volume "${PWD}:${PWD}:ro" \
+  --volume "${PWD}:${PWD}" \
   --workdir "${PWD}" \
   "$IMAGE_NAME"

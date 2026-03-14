@@ -37,9 +37,16 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /phpantom_lsp /usr/local/bin/phpantom_lsp
 
 RUN useradd -m -u 1001 lsp
+
+# Entrypoint script: creates .phpantom.toml with strategy=full in every
+# composer.json directory that doesn't already have one. This gives all
+# projects full background indexing (hover, findReferences, goToDefinition)
+# without requiring users to manually create the config file.
+COPY --chown=root:root entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 USER lsp
 
 WORKDIR /workspace
 
-# phpantom_lsp communicates over stdio
-ENTRYPOINT ["phpantom_lsp"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

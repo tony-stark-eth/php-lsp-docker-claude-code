@@ -349,12 +349,13 @@ def _ensure_images_parallel(images_and_dirs):
         t.join()
 
 
-def _start_server(image, workspace, uid_gid):
+def _start_server(image, workspace, uid_gid, readonly=True):
+    mount = f"{workspace}:{workspace}:ro" if readonly else f"{workspace}:{workspace}"
     return subprocess.Popen(
         [
             "docker", "run", "--rm", "--interactive",
             "--user", uid_gid,
-            "--volume", f"{workspace}:{workspace}:ro",
+            "--volume", mount,
             "--workdir", workspace,
             image,
         ],
@@ -377,8 +378,8 @@ if __name__ == "__main__":
     workspace = os.getcwd()
     uid_gid = f"{os.getuid()}:{os.getgid()}"
 
-    proc1 = _start_server("claude-code-lsp-intelephense", workspace, uid_gid)
-    proc2 = _start_server("claude-code-lsp-phpantom",     workspace, uid_gid)
+    proc1 = _start_server("claude-code-lsp-intelephense", workspace, uid_gid, readonly=True)
+    proc2 = _start_server("claude-code-lsp-phpantom",     workspace, uid_gid, readonly=False)
 
     def _shutdown(signum, frame):
         """Kill both Docker containers on SIGTERM/SIGINT so they don't linger."""
