@@ -1,0 +1,14 @@
+{
+  "name": "intelephense-docker",
+  "version": "1.0.0",
+  "description": "Intelephense PHP LSP via Docker (free tier — no license key required)",
+  "author": {
+    "name": "php-lsp-docker-claude-code",
+    "url": "https://github.com/YOUR_USERNAME/php-lsp-docker-claude-code"
+  },
+  "homepage": "https://github.com/YOUR_USERNAME/php-lsp-docker-claude-code",
+  "repository": "https://github.com/YOUR_USERNAME/php-lsp-docker-claude-code",
+  "license": "MIT",
+  "keywords": ["php", "lsp", "intelephense", "docker", "claude-code"],
+  "lspServers": "./.lsp.json"
+}

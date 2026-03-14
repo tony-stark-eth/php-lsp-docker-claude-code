@@ -1,0 +1,55 @@
+{
+  "name": "php-lsp-docker-claude-code",
+  "description": "PHP LSP servers (Intelephense + PHPantom) running in Docker for Claude Code",
+  "homepage": "https://github.com/YOUR_USERNAME/php-lsp-docker-claude-code",
+  "plugins": [
+    {
+      "name": "intelephense-docker",
+      "path": "./intelephense",
+      "description": "Intelephense PHP LSP via Docker (free tier)",
+      "tags": ["php", "lsp", "intelephense"],
+      "lspServers": {
+        "php": {
+          "command": "${CLAUDE_PLUGIN_ROOT}/bin/lsp-server.sh",
+          "args": [],
+          "extensionToLanguage": {
+            ".php": "php",
+            ".phtml": "php",
+            ".php3": "php",
+            ".php4": "php",
+            ".php5": "php",
+            ".php7": "php",
+            ".php8": "php",
+            ".phps": "php",
+            ".phar": "php"
+          },
+          "startupTimeout": 30000
+        }
+      }
+    },
+    {
+      "name": "phpantom-docker",
+      "path": "./phpantom",
+      "description": "PHPantom ultra-fast Rust PHP LSP via Docker",
+      "tags": ["php", "lsp", "phpantom", "rust"],
+      "lspServers": {
+        "php": {
+          "command": "${CLAUDE_PLUGIN_ROOT}/bin/lsp-server.sh",
+          "args": [],
+          "extensionToLanguage": {
+            ".php": "php",
+            ".phtml": "php",
+            ".php3": "php",
+            ".php4": "php",
+            ".php5": "php",
+            ".php7": "php",
+            ".php8": "php",
+            ".phps": "php",
+            ".phar": "php"
+          },
+          "startupTimeout": 30000
+        }
+      }
+    }
+  ]
+}
