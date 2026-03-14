@@ -7,6 +7,40 @@ on:
     branches: [main]
 
 jobs:
+  validate:
+    name: Validate files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON files
+        run: |
+          for f in \
+            .claude-plugin/marketplace.json \
+            intelephense/.lsp.json intelephense/plugin.json intelephense/hooks/hooks.json \
+            phpantom/.lsp.json phpantom/plugin.json phpantom/hooks/hooks.json \
+            combined/.lsp.json combined/plugin.json combined/hooks/hooks.json; do
+            echo "Checking $f..."
+            python3 -m json.tool "$f" > /dev/null
+          done
+          echo "All JSON files valid"
+
+      - name: Check required files exist
+        run: |
+          for plugin in intelephense phpantom combined; do
+            test -f "$plugin/.lsp.json"     || (echo "Missing $plugin/.lsp.json" && exit 1)
+            test -f "$plugin/plugin.json"   || (echo "Missing $plugin/plugin.json" && exit 1)
+            test -f "$plugin/hooks/hooks.json" || (echo "Missing $plugin/hooks/hooks.json" && exit 1)
+            test -f "$plugin/bin/lsp-server.sh" || (echo "Missing $plugin/bin/lsp-server.sh" && exit 1)
+          done
+          echo "All required files present"
+
+      - name: Lint markdown
+        uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: "**/*.md"
+          config: '{"default":true,"MD013":false,"MD033":false}'
+
   build-and-smoke-test:
     name: Build images & LSP smoke test
     runs-on: ubuntu-latest

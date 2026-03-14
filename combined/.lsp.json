@@ -2,6 +2,7 @@
   "php": {
     "command": "${CLAUDE_PLUGIN_ROOT}/bin/lsp-server.sh",
     "args": [],
+    "transport": "stdio",
     "extensionToLanguage": {
       ".php": "php",
       ".phtml": "php",
@@ -13,6 +14,9 @@
       ".phps": "php",
       ".phar": "php"
     },
-    "startupTimeout": 180000
+    "initializationOptions": {},
+    "settings": {},
+    "startupTimeout": 180000,
+    "maxRestarts": 3
   }
 }
