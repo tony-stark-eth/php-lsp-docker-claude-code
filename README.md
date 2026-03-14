@@ -228,4 +228,5 @@ php-lsp-docker-claude-code/
 
 ## License
 
-MIT
+Personal Use / Non-Commercial — see [LICENSE](LICENSE) for full terms.
+Commercial use requires written permission from the copyright holder.

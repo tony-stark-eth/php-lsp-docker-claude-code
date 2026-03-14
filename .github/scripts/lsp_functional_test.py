@@ -20,6 +20,7 @@ Positions in fixtures/test.php (0-indexed):
 
 import json
 import os
+import queue
 import subprocess
 import sys
 import threading
@@ -27,7 +28,6 @@ import time
 
 ENCODING = "utf-8"
 
-# Fixture lives inside the repo so Docker can find it at /workspace/...
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT   = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 FIXTURE_REL = ".github/scripts/fixtures/test.php"
@@ -36,14 +36,12 @@ FILE_URI    = f"file:///workspace/{FIXTURE_REL}"
 ROOT_URI    = "file:///workspace"
 
 # After textDocument/didOpen we wait for the server to index the file.
-# Intelephense is slow to start indexing; PHPantom is near-instant.
 INDEX_WAIT = {
     "intelephense": 8,
     "phpantom":     2,
-    "combined":     8,   # combined waits for Intelephense on initialize, then PHPantom wins
+    "combined":     8,
 }
 
-# Per-request read timeout in seconds
 REQUEST_TIMEOUT = 30
 
 
@@ -78,11 +76,50 @@ def read_message(stream) -> dict | None:
     return json.loads(body.decode(ENCODING))
 
 
+# ── Background stdout reader ──────────────────────────────────────────────────
+# The server sends diagnostics/progress notifications continuously. If we
+# don't read stdout at all times the pipe buffer fills up, the server blocks,
+# and then crashes. This thread drains stdout into a queue so the main thread
+# can pull responses by id without blocking the server.
+
+def start_reader(proc: subprocess.Popen) -> queue.Queue:
+    """Spawn a thread that pumps all server messages into a Queue."""
+    msg_queue: queue.Queue = queue.Queue()
+
+    def _read():
+        while True:
+            msg = read_message(proc.stdout)
+            if msg is None:
+                msg_queue.put(None)  # sentinel: server closed stdout
+                break
+            msg_queue.put(msg)
+
+    threading.Thread(target=_read, daemon=True).start()
+    return msg_queue
+
+
+def wait_for_id(msg_queue: queue.Queue, req_id: int, label: str) -> dict | None:
+    """Pull messages from the queue until we find the response for req_id."""
+    deadline = time.monotonic() + REQUEST_TIMEOUT
+    while time.monotonic() < deadline:
+        remaining = max(0.1, deadline - time.monotonic())
+        try:
+            msg = msg_queue.get(timeout=min(remaining, 1.0))
+        except queue.Empty:
+            continue
+        if msg is None:
+            print(f"[functional] {label}: server closed stdout unexpectedly", file=sys.stderr)
+            return None
+        if msg.get("id") == req_id:
+            return msg
+        # Discard notifications (diagnostics, progress, logMessage…)
+    return None
+
+
 # ── Server startup ────────────────────────────────────────────────────────────
 
 def start_server(plugin: str) -> subprocess.Popen:
     uid_gid = f"{os.getuid()}:{os.getgid()}"
-
     docker_args = [
         "docker", "run", "--rm", "--interactive",
         "--user", uid_gid,
@@ -118,21 +155,6 @@ def drain_stderr(proc: subprocess.Popen, label: str) -> None:
     threading.Thread(target=_drain, daemon=True).start()
 
 
-# ── Response reader ───────────────────────────────────────────────────────────
-
-def wait_for_response(proc: subprocess.Popen, req_id: int, label: str) -> dict | None:
-    """Read messages until we see the response for req_id, skipping notifications."""
-    deadline = time.monotonic() + REQUEST_TIMEOUT
-    while time.monotonic() < deadline:
-        msg = read_message(proc.stdout)
-        if msg is None:
-            return None
-        if msg.get("id") == req_id:
-            return msg
-        # Skip server notifications (diagnostics, progress, log messages)
-    return None
-
-
 # ── Shutdown ──────────────────────────────────────────────────────────────────
 
 def shutdown(proc: subprocess.Popen, next_id: int) -> None:
@@ -155,7 +177,6 @@ def shutdown(proc: subprocess.Popen, next_id: int) -> None:
 # ── Test assertions ───────────────────────────────────────────────────────────
 
 def check_completion(result, plugin: str) -> None:
-    """Assert the completion result contains method suggestions for Greeter."""
     if result is None:
         _fail(plugin, "completion", "got null result — no completions returned")
 
@@ -164,7 +185,6 @@ def check_completion(result, plugin: str) -> None:
         _fail(plugin, "completion", f"expected a non-empty items list, got: {result!r}")
 
     labels = {item.get("label", "") for item in items if isinstance(item, dict)}
-    # Either 'greet' or 'farewell' should appear — confirms member completion works
     if not any(lbl in labels for lbl in ("greet", "farewell", "greet()", "farewell()")):
         _fail(plugin, "completion",
               f"expected 'greet' or 'farewell' in labels, got: {sorted(labels)!r}")
@@ -174,16 +194,13 @@ def check_completion(result, plugin: str) -> None:
 
 
 def check_hover(result, plugin: str) -> None:
-    """Assert the hover result contains type information."""
     if result is None:
-        # Some servers return null hover when the cursor isn't on a symbol —
-        # log a warning but don't fail, since null is a valid LSP response.
+        # null is a valid LSP response; warn but don't fail
         print(f"[functional] {plugin} hover: WARN — null result (cursor may be off-symbol)",
               flush=True)
         return
 
-    contents = result.get("contents")
-    if not contents:
+    if not result.get("contents"):
         _fail(plugin, "hover", f"expected 'contents' in result, got: {result!r}")
 
     print(f"[functional] {plugin} hover: OK", flush=True)
@@ -206,6 +223,7 @@ def main() -> None:
 
     proc = start_server(plugin)
     drain_stderr(proc, plugin)
+    msg_queue = start_reader(proc)   # drain stdout continuously from now on
 
     req_id = 1
 
@@ -231,13 +249,13 @@ def main() -> None:
     }))
     proc.stdin.flush()
 
-    init_resp = wait_for_response(proc, req_id, plugin)
+    init_resp = wait_for_id(msg_queue, req_id, plugin)
     if not init_resp or "error" in init_resp:
         _fail(plugin, "initialize", str(init_resp))
     print(f"[functional] {plugin} initialize: OK", flush=True)
     req_id += 1
 
-    # 2 ── initialized (notification) ─────────────────────────────────────────
+    # 2 ── initialized ────────────────────────────────────────────────────────
     proc.stdin.write(encode({"jsonrpc": "2.0", "method": "initialized", "params": {}}))
     proc.stdin.flush()
 
@@ -264,7 +282,7 @@ def main() -> None:
     time.sleep(wait_secs)
 
     # 4 ── textDocument/completion ─────────────────────────────────────────────
-    # Position: line 25 "echo $greeter->greet();"  char 15 = right after "->"
+    # Line 25: "echo $greeter->greet();"  char 15 = right after "->"
     proc.stdin.write(encode({
         "jsonrpc": "2.0", "id": req_id, "method": "textDocument/completion",
         "params": {
@@ -275,14 +293,14 @@ def main() -> None:
     }))
     proc.stdin.flush()
 
-    comp_resp = wait_for_response(proc, req_id, plugin)
+    comp_resp = wait_for_id(msg_queue, req_id, plugin)
     if comp_resp and "error" in comp_resp:
         _fail(plugin, "completion", f"server returned error: {comp_resp['error']}")
     check_completion(comp_resp.get("result") if comp_resp else None, plugin)
     req_id += 1
 
     # 5 ── textDocument/hover ──────────────────────────────────────────────────
-    # Position: line 4 "class Greeter"  char 8 = inside "Greeter"
+    # Line 4: "class Greeter"  char 8 = inside "Greeter"
     proc.stdin.write(encode({
         "jsonrpc": "2.0", "id": req_id, "method": "textDocument/hover",
         "params": {
@@ -292,7 +310,7 @@ def main() -> None:
     }))
     proc.stdin.flush()
 
-    hover_resp = wait_for_response(proc, req_id, plugin)
+    hover_resp = wait_for_id(msg_queue, req_id, plugin)
     if hover_resp and "error" in hover_resp:
         _fail(plugin, "hover", f"server returned error: {hover_resp['error']}")
     check_hover(hover_resp.get("result") if hover_resp else None, plugin)

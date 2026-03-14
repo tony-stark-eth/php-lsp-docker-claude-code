@@ -1,21 +1,35 @@
-MIT License
+Copyright (c) 2026 tony-stark-eth. All rights reserved.
 
-Copyright (c) 2026
+Personal Use License — Non-Commercial
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any individual obtaining a
+copy of this software and associated documentation files (the "Software"), to
+use, copy, modify, and distribute the Software solely for personal,
+educational, or open-source non-commercial purposes, subject to the following
+conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. NON-COMMERCIAL USE ONLY. You may not use the Software, or any derivative
+   work, for commercial purposes without obtaining explicit written permission
+   from the copyright holder. "Commercial purposes" means any use intended
+   for or directed toward commercial advantage or monetary compensation,
+   including but not limited to SaaS offerings, paid products, consulting
+   services, or internal business tooling for a for-profit organisation.
+
+2. ATTRIBUTION. All copies or substantial portions of the Software must
+   include this licence notice and the above copyright notice.
+
+3. NO SUBLICENSING. You may not sublicense the Software under different terms
+   or grant others rights beyond those set out in this licence.
+
+4. RESERVATION OF RIGHTS. The copyright holder reserves the exclusive right
+   to use the Software for any commercial purpose without restriction.
+
+To obtain a commercial licence, contact the copyright holder via GitHub:
+https://github.com/tony-stark-eth
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
