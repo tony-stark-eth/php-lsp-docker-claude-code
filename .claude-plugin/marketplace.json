@@ -1,11 +1,15 @@
 {
   "name": "php-lsp-docker-claude-code",
   "description": "PHP LSP servers (Intelephense + PHPantom) running in Docker for Claude Code",
-  "homepage": "https://github.com/YOUR_USERNAME/php-lsp-docker-claude-code",
+  "homepage": "https://github.com/tony-stark-eth/php-lsp-docker-claude-code",
+  "owner": {
+    "name": "tony-stark-eth",
+    "url": "https://github.com/tony-stark-eth"
+  },
   "plugins": [
     {
       "name": "intelephense-docker",
-      "path": "./intelephense",
+      "source": "./intelephense",
       "description": "Intelephense PHP LSP via Docker (free tier)",
       "tags": ["php", "lsp", "intelephense"],
       "lspServers": {
@@ -29,7 +33,7 @@
     },
     {
       "name": "phpantom-docker",
-      "path": "./phpantom",
+      "source": "./phpantom",
       "description": "PHPantom ultra-fast Rust PHP LSP via Docker",
       "tags": ["php", "lsp", "phpantom", "rust"],
       "lspServers": {

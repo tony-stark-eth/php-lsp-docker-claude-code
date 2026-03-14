@@ -4,10 +4,10 @@
   "description": "PHPantom — ultra-fast PHP LSP in Rust via Docker (10ms startup, 7MB RAM)",
   "author": {
     "name": "php-lsp-docker-claude-code",
-    "url": "https://github.com/YOUR_USERNAME/php-lsp-docker-claude-code"
+    "url": "https://github.com/tony-stark-eth/php-lsp-docker-claude-code"
   },
-  "homepage": "https://github.com/YOUR_USERNAME/php-lsp-docker-claude-code",
-  "repository": "https://github.com/YOUR_USERNAME/php-lsp-docker-claude-code",
+  "homepage": "https://github.com/tony-stark-eth/php-lsp-docker-claude-code",
+  "repository": "https://github.com/tony-stark-eth/php-lsp-docker-claude-code",
   "license": "MIT",
   "keywords": ["php", "lsp", "phpantom", "docker", "claude-code", "rust"],
   "lspServers": "./.lsp.json"
