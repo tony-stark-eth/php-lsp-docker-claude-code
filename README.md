@@ -1,6 +1,7 @@
 # PHP LSP Docker — Claude Code
 
 [![CI](https://github.com/tony-stark-eth/php-lsp-docker-claude-code/actions/workflows/ci.yml/badge.svg)](https://github.com/tony-stark-eth/php-lsp-docker-claude-code/actions/workflows/ci.yml)
+[![Docker](https://github.com/tony-stark-eth/php-lsp-docker-claude-code/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/tony-stark-eth/php-lsp-docker-claude-code/actions/workflows/docker-publish.yml)
 
 Run **Intelephense** (free tier) and **[PHPantom](https://github.com/AJenbo/phpantom_lsp)** as Claude Code LSP servers via Docker — no local PHP toolchain required.
 
@@ -17,7 +18,7 @@ Three plugins to choose from:
 | Laravel Eloquent       | ❌                   |                     ✅ |                                ✅ |
 | Startup time           | ~5 s                |             **10 ms** |                             ~5 s |
 | RAM usage              | ~520 MB             |              **7 MB** |                          ~527 MB |
-| Build time (first run) | ~30 s               | ~2 min (Rust compile) |            ~2 min (in parallel) |
+| First-run image fetch  | ~30 s pull / build  |           ~30 s pull  |                      ~30 s pull |
 
 > **Which should I use?**
 >
@@ -31,6 +32,14 @@ Three plugins to choose from:
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine on Linux) — **running**
 - [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) **v2.1.50+**
+
+> **If LSP features don't activate after installing the plugin**, add the following to your Claude Code `settings.json`:
+>
+> ```json
+> "ENABLE_LSP_TOOL": "1"
+> ```
+>
+> Open `settings.json` via **Claude Code → Settings → Edit settings.json** (or `~/.claude/settings.json`).
 
 ---
 
@@ -78,11 +87,13 @@ Makes wrapper scripts executable and optionally pre-builds the Docker images. Yo
 
 ### Single-server plugins (intelephense-docker / phpantom-docker)
 
-Each plugin ships a `bin/lsp-server.sh` wrapper that Claude Code treats as the LSP binary. On first run it builds the Docker image automatically, then proxies stdio directly to the container:
+Each plugin ships a `bin/lsp-server.sh` wrapper that Claude Code treats as the LSP binary. On first use the wrapper pulls the pre-built image from GHCR (no compilation required), then proxies stdio directly to the container:
 
 ```text
 Claude Code  ←──stdio──→  bin/lsp-server.sh  ←──docker run -i──→  LSP in container
 ```
+
+If GHCR is unreachable the wrapper falls back to building the image locally.
 
 ### Combined plugin (php-combined-docker)
 
@@ -124,11 +135,38 @@ All hooks are silent no-ops when the tools are not present, so they work out of 
 
 ---
 
+## Docker images
+
+Pre-built images are published to the GitHub Container Registry and refreshed every Monday plus on every push to `main`:
+
+| Image | GHCR path |
+|---|---|
+| Intelephense | `ghcr.io/tony-stark-eth/php-lsp-docker-claude-code/intelephense:latest` |
+| PHPantom | `ghcr.io/tony-stark-eth/php-lsp-docker-claude-code/phpantom:latest` |
+
+Tags available: `latest`, `YYYY-MM-DD`, and short git SHA.
+
+The wrapper scripts pull from GHCR automatically on first use. To force a refresh to the latest published image:
+
+```bash
+docker pull ghcr.io/tony-stark-eth/php-lsp-docker-claude-code/intelephense:latest
+docker pull ghcr.io/tony-stark-eth/php-lsp-docker-claude-code/phpantom:latest
+```
+
+---
+
 ## Updating
 
 ### Intelephense
 
-Rebuild to pick up the latest npm release:
+Pull the latest published image:
+
+```bash
+docker pull ghcr.io/tony-stark-eth/php-lsp-docker-claude-code/intelephense:latest
+docker tag  ghcr.io/tony-stark-eth/php-lsp-docker-claude-code/intelephense:latest claude-code-lsp-intelephense
+```
+
+Or rebuild locally from source:
 
 ```bash
 docker build --no-cache -t claude-code-lsp-intelephense ./intelephense
@@ -136,13 +174,20 @@ docker build --no-cache -t claude-code-lsp-intelephense ./intelephense
 
 ### PHPantom
 
-Rebuild to pick up the latest commits from the `main` branch:
+Pull the latest published image (no Rust compilation):
+
+```bash
+docker pull ghcr.io/tony-stark-eth/php-lsp-docker-claude-code/phpantom:latest
+docker tag  ghcr.io/tony-stark-eth/php-lsp-docker-claude-code/phpantom:latest claude-code-lsp-phpantom
+```
+
+Or rebuild locally from the `main` branch:
 
 ```bash
 docker build --no-cache -t claude-code-lsp-phpantom ./phpantom
 ```
 
-Or pin a specific commit/tag with the `PHPANTOM_REF` build arg:
+Pin a specific PHPantom release with the `PHPANTOM_REF` build arg:
 
 ```bash
 docker build --no-cache --build-arg PHPANTOM_REF=0.4.0 -t claude-code-lsp-phpantom ./phpantom
@@ -191,7 +236,8 @@ php-lsp-docker-claude-code/
 │   │   ├── fixtures/test.php     # PHP fixture for functional CI tests
 │   │   ├── lsp_smoke_test.py     # initialize smoke test (all 3 plugins)
 │   │   └── lsp_functional_test.py# completion + hover functional tests
-│   └── workflows/ci.yml          # Validate → build → smoke → functional
+│   ├── workflows/ci.yml           # Validate → build → smoke → functional
+│   └── workflows/docker-publish.yml # Build & push images to GHCR
 ├── intelephense/
 │   ├── .lsp.json                 # Claude Code LSP plugin config
 │   ├── plugin.json               # Plugin manifest
