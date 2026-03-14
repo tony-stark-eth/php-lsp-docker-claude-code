@@ -186,7 +186,14 @@ def main():
         proc.stdin.flush()
     except BrokenPipeError:
         pass
-    proc.wait(timeout=10)
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
 
 if __name__ == "__main__":

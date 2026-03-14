@@ -83,20 +83,24 @@ def _to_list(value):
     return value if isinstance(value, list) else [value]
 
 
-def merge_results(method, r1, r2):
+def merge_results(method, r_phantom, r_intel):
     """
-    Merge two LSP results.
-    r1 = Intelephense result (index 0), r2 = PHPantom result (index 1).
+    Merge two LSP results. PHPantom takes precedence for all single-winner
+    methods; Intelephense is the fallback (adds diagnostics and references).
+
+    r_phantom = PHPantom result (server index 1)
+    r_intel   = Intelephense result (server index 0)
     """
-    if r1 is None:
-        return r2
-    if r2 is None:
-        return r1
+    if r_phantom is None:
+        return r_intel
+    if r_intel is None:
+        return r_phantom
 
     if method == "initialize":
-        merged = dict(r1)
+        # Start from PHPantom capabilities, fill gaps with Intelephense
+        merged = dict(r_phantom)
         merged["capabilities"] = _merge_capabilities(
-            r1.get("capabilities", {}), r2.get("capabilities", {})
+            r_phantom.get("capabilities", {}), r_intel.get("capabilities", {})
         )
         return merged
 
@@ -106,9 +110,10 @@ def merge_results(method, r1, r2):
                 return r.get("items", [])
             return r if isinstance(r, list) else []
 
-        items = extract(r1) + extract(r2)
-        incomplete = (isinstance(r1, dict) and r1.get("isIncomplete", False)) or \
-                     (isinstance(r2, dict) and r2.get("isIncomplete", False))
+        # PHPantom items first (higher priority in UI ranking)
+        items = extract(r_phantom) + extract(r_intel)
+        incomplete = (isinstance(r_phantom, dict) and r_phantom.get("isIncomplete", False)) or \
+                     (isinstance(r_intel, dict) and r_intel.get("isIncomplete", False))
         return {"isIncomplete": bool(incomplete), "items": items}
 
     if method in (
@@ -118,21 +123,22 @@ def merge_results(method, r1, r2):
         "textDocument/implementation",
         "textDocument/references",
     ):
-        return _to_list(r1) + _to_list(r2)
+        # PHPantom locations first
+        return _to_list(r_phantom) + _to_list(r_intel)
 
     if method in ("textDocument/codeAction", "textDocument/documentSymbol",
                   "workspace/symbol"):
-        return _to_list(r1) + _to_list(r2)
+        return _to_list(r_phantom) + _to_list(r_intel)
 
     if method == "textDocument/hover":
-        # Intelephense has richer hover docs; fall back to PHPantom
-        return r1 if r1 is not None else r2
+        # PHPantom preferred; fall back to Intelephense
+        return r_phantom if r_phantom is not None else r_intel
 
     if method == "textDocument/signatureHelp":
-        return r1 if (r1 and r1.get("signatures")) else r2
+        return r_phantom if (r_phantom and r_phantom.get("signatures")) else r_intel
 
-    # Default: prefer Intelephense
-    return r1
+    # Default: prefer PHPantom
+    return r_phantom
 
 
 # ── Multiplexer ───────────────────────────────────────────────────────────────
@@ -151,6 +157,10 @@ class Multiplexer:
     def _write_to_client(self, msg):
         with self._write_lock:
             write_message(sys.stdout.buffer, msg)
+
+    # Methods where we must wait for both servers before responding,
+    # because merging both results is essential (e.g. capability negotiation).
+    _WAIT_FOR_BOTH = frozenset({"initialize"})
 
     def _handle_server_message(self, msg, server_idx):
         """Called from per-server reader threads."""
@@ -174,29 +184,38 @@ class Multiplexer:
                     return
 
                 entry = self._pending[msg_id]
+
+                if entry.get("resolved"):
+                    return  # PHPantom already answered; discard Intelephense's late response
+
                 entry["received"] += 1
                 if "result" in msg:
-                    entry["results"].append(msg["result"])
+                    entry["results"][server_idx] = msg["result"]
                 elif "error" in msg:
-                    entry["errors"].append(msg["error"])
+                    entry["errors"][server_idx] = msg["error"]
 
-                if entry["received"] < 2:
-                    return  # still waiting for the other server
+                # PHPantom (idx=1) wins immediately when it has a non-null result,
+                # unless this method requires both responses to merge correctly.
+                phantom_result = entry["results"].get(1)
+                both_responded = entry["received"] >= 2
+                wait_for_both  = entry["method"] in self._WAIT_FOR_BOTH
 
-                del self._pending[msg_id]
-
-            # Both responded — merge outside the lock
-            if entry["results"]:
-                if len(entry["results"]) == 2:
-                    merged = merge_results(
-                        entry["method"], entry["results"][0], entry["results"][1]
-                    )
+                if (phantom_result is not None and not wait_for_both) or both_responded:
+                    entry["resolved"] = True
+                    del self._pending[msg_id]
                 else:
-                    merged = entry["results"][0]
+                    return  # still waiting
+
+            # Outside the lock — resolve and send to client.
+            # server_idx 0 = Intelephense, 1 = PHPantom.
+            if entry["results"]:
+                r_phantom = entry["results"].get(1)
+                r_intel   = entry["results"].get(0)
+                merged = merge_results(entry["method"], r_phantom, r_intel)
                 self._write_to_client({"jsonrpc": "2.0", "id": msg_id, "result": merged})
             else:
                 self._write_to_client(
-                    {"jsonrpc": "2.0", "id": msg_id, "error": entry["errors"][0]}
+                    {"jsonrpc": "2.0", "id": msg_id, "error": next(iter(entry["errors"].values()))}
                 )
 
     def _merge_diagnostics(self, msg, server_idx):
@@ -247,8 +266,8 @@ class Multiplexer:
                     self._pending[msg_id] = {
                         "method": method,
                         "received": 0,
-                        "results": [],
-                        "errors": [],
+                        "results": {},   # keyed by server_idx: 0=Intelephense, 1=PHPantom
+                        "errors": {},
                     }
 
             # Fan out to both servers

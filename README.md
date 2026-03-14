@@ -16,6 +16,7 @@ Run **Intelephense** (free tier) and **[PHPantom](https://github.com/AJenbo/phpa
 | Build time (first run) | ~30 s               | ~2 min (Rust compile) | ~2 min (in parallel)  |
 
 > **Which should I use?**
+>
 > - **Combined** (`php-combined-docker`) — best results; runs both servers and merges responses via a Python multiplexer. Recommended if you don't mind the extra RAM.
 > - **PHPantom** — ultra-low RAM and instant startup; great for large codebases and Laravel projects.
 > - **Intelephense** — reliable diagnostics and find-references on its own.
@@ -55,13 +56,13 @@ npx tweakcc --apply
 
 ### 4. Register the marketplace in Claude Code
 
-```
+```text
 /plugin marketplace add tony-stark-eth/php-lsp-docker-claude-code
 ```
 
 ### 5. Install a plugin
 
-```
+```text
 /plugins
 ```
 
@@ -84,7 +85,7 @@ Each plugin ships a small **wrapper shell script** (`bin/lsp-server.sh`) that Cl
 2. It calls `docker run --rm -i` with the current working directory mounted as `/workspace`.
 3. Stdio is piped directly — Claude Code and the LSP server talk over the same stdin/stdout channel as if the server were local.
 
-```
+```text
 Claude Code  ←──stdio──→  bin/lsp-server.sh  ←──docker run -i──→  LSP in container
 ```
 
@@ -95,18 +96,23 @@ The workspace is mounted **read-only** so the containers cannot modify your file
 ## Updating
 
 ### Intelephense
+
 Rebuild to pick up the latest npm release:
+
 ```bash
 docker build --no-cache -t claude-code-lsp-intelephense ./intelephense
 ```
 
 ### PHPantom
+
 Rebuild to pick up the latest commits from the `main` branch:
+
 ```bash
 docker build --no-cache -t claude-code-lsp-phpantom ./phpantom
 ```
 
 Or pin a specific tag by changing the `PHPANTOM_REF` build arg:
+
 ```bash
 docker build --no-cache --build-arg PHPANTOM_REF=0.4.0 -t claude-code-lsp-phpantom ./phpantom
 ```
@@ -116,30 +122,36 @@ docker build --no-cache --build-arg PHPANTOM_REF=0.4.0 -t claude-code-lsp-phpant
 ## Troubleshooting
 
 ### "Executable not found in $PATH"
+
 The wrapper scripts must be executable. Run:
+
 ```bash
 chmod +x intelephense/bin/lsp-server.sh phpantom/bin/lsp-server.sh
 ```
 
 ### "No LSP server available for file type: .php"
+
 - Make sure you ran `npx tweakcc --apply`.
 - Restart Claude Code after installing the plugin.
 - Check the `/plugin` Errors tab inside Claude Code.
 
 ### PHPantom build fails
+
 PHPantom requires a network-connected Docker build to clone the source repo. Check your Docker network settings. Alternatively, build manually:
+
 ```bash
 cd phpantom && docker build -t claude-code-lsp-phpantom .
 ```
 
 ### Intelephense cross-file completions not working
+
 Intelephense needs the project's Composer autoloader. Run `composer install` in your project root so the LSP can find all classes.
 
 ---
 
 ## Project structure
 
-```
+```text
 php-lsp-docker-claude-code/
 ├── .claude-plugin/
 │   └── marketplace.json        # Claude Code marketplace definition
