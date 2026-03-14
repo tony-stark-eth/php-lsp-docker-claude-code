@@ -1,25 +1,29 @@
 # PHP LSP Docker — Claude Code
 
+[![CI](https://github.com/tony-stark-eth/php-lsp-docker-claude-code/actions/workflows/ci.yml/badge.svg)](https://github.com/tony-stark-eth/php-lsp-docker-claude-code/actions/workflows/ci.yml)
+
 Run **Intelephense** (free tier) and **[PHPantom](https://github.com/AJenbo/phpantom_lsp)** as Claude Code LSP servers via Docker — no local PHP toolchain required.
 
-| Feature                | Intelephense (free) |              PHPantom |              Combined |
-|------------------------|---------------------|----------------------:|----------------------:|
-| Completion             | ✅                   |                     ✅ |              ✅ merged |
-| Go-to-definition       | ✅                   |                     ✅ |              ✅ merged |
-| Hover                  | ✅                   |            🚧 partial |                     ✅ |
-| Find references        | ✅                   |             ❌ roadmap |                     ✅ |
-| Diagnostics            | ✅                   |             ❌ roadmap |                     ✅ |
-| Auto-import            | ❌ paid              |                     ✅ |                     ✅ |
-| Laravel Eloquent       | ❌                   |                     ✅ |                     ✅ |
-| Startup time           | ~5 s                |             **10 ms** |                  ~5 s |
-| RAM usage              | ~520 MB             |              **7 MB** |               ~527 MB |
-| Build time (first run) | ~30 s               | ~2 min (Rust compile) | ~2 min (in parallel)  |
+Three plugins to choose from:
+
+| Feature                | Intelephense (free) |              PHPantom |                          Combined |
+|------------------------|---------------------|----------------------:|----------------------------------:|
+| Completion             | ✅                   |                     ✅ |                         ✅ merged |
+| Go-to-definition       | ✅                   |                     ✅ |                         ✅ merged |
+| Hover                  | ✅                   |            🚧 partial |                                ✅ |
+| Find references        | ✅                   |             ❌ roadmap |                                ✅ |
+| Diagnostics            | ✅                   |             ❌ roadmap |                                ✅ |
+| Auto-import            | ❌ paid              |                     ✅ |                                ✅ |
+| Laravel Eloquent       | ❌                   |                     ✅ |                                ✅ |
+| Startup time           | ~5 s                |             **10 ms** |                             ~5 s |
+| RAM usage              | ~520 MB             |              **7 MB** |                          ~527 MB |
+| Build time (first run) | ~30 s               | ~2 min (Rust compile) |            ~2 min (in parallel) |
 
 > **Which should I use?**
 >
-> - **Combined** (`php-combined-docker`) — best results; runs both servers and merges responses via a Python multiplexer. Recommended if you don't mind the extra RAM.
-> - **PHPantom** — ultra-low RAM and instant startup; great for large codebases and Laravel projects.
-> - **Intelephense** — reliable diagnostics and find-references on its own.
+> - **Combined** (`php-combined-docker`) — recommended. Runs both servers; PHPantom answers requests immediately (it's faster), Intelephense fills in diagnostics in the background.
+> - **PHPantom** (`phpantom-docker`) — ultra-low RAM and near-instant startup. Best for large codebases and Laravel projects.
+> - **Intelephense** (`intelephense-docker`) — reliable diagnostics and find-references on its own.
 
 ---
 
@@ -39,13 +43,13 @@ git clone https://github.com/tony-stark-eth/php-lsp-docker-claude-code.git
 cd php-lsp-docker-claude-code
 ```
 
-### 2. Run the setup script
+### 2. Run the setup script (optional)
 
 ```bash
 bash setup.sh
 ```
 
-This makes the wrapper scripts executable and optionally pre-builds the Docker images.
+Makes wrapper scripts executable and optionally pre-builds the Docker images. You can skip this — images build automatically on first Claude Code use.
 
 ### 3. Register the marketplace in Claude Code
 
@@ -53,7 +57,7 @@ This makes the wrapper scripts executable and optionally pre-builds the Docker i
 /plugin marketplace add tony-stark-eth/php-lsp-docker-claude-code
 ```
 
-### 5. Install a plugin
+### 4. Install a plugin
 
 ```text
 /plugins
@@ -61,7 +65,7 @@ This makes the wrapper scripts executable and optionally pre-builds the Docker i
 
 1. Tab to **Marketplaces**
 2. Enter `php-lsp-docker-claude-code` → **Browse plugins**
-3. Select one of the three plugins with `Space`:
+3. Select one plugin with `Space`:
    - `php-combined-docker` — both servers, merged results (recommended)
    - `intelephense-docker` — Intelephense only
    - `phpantom-docker` — PHPantom only
@@ -72,17 +76,51 @@ This makes the wrapper scripts executable and optionally pre-builds the Docker i
 
 ## How it works
 
-Each plugin ships a small **wrapper shell script** (`bin/lsp-server.sh`) that Claude Code treats as the LSP binary. When Claude Code starts an LSP session:
+### Single-server plugins (intelephense-docker / phpantom-docker)
 
-1. The wrapper checks whether the Docker image exists; if not it builds it automatically.
-2. It calls `docker run --rm -i` with the current working directory mounted as `/workspace`.
-3. Stdio is piped directly — Claude Code and the LSP server talk over the same stdin/stdout channel as if the server were local.
+Each plugin ships a `bin/lsp-server.sh` wrapper that Claude Code treats as the LSP binary. On first run it builds the Docker image automatically, then proxies stdio directly to the container:
 
 ```text
 Claude Code  ←──stdio──→  bin/lsp-server.sh  ←──docker run -i──→  LSP in container
 ```
 
-The workspace is mounted **read-only** so the containers cannot modify your files.
+### Combined plugin (php-combined-docker)
+
+The combined plugin runs a Python multiplexer (`bin/lsp-multiplexer.py`) that fans every JSON-RPC request out to both servers simultaneously:
+
+```text
+                               ┌──docker run -i──→  Intelephense
+Claude Code  ←──stdio──→  lsp-multiplexer.py
+                               └──docker run -i──→  PHPantom
+```
+
+**Merge strategy** — PHPantom wins by default (it's faster):
+
+| Method | Strategy |
+|---|---|
+| `initialize` | Wait for both; union of `ServerCapabilities` |
+| `textDocument/completion` | PHPantom items first, then Intelephense items |
+| `textDocument/definition` / `references` | PHPantom locations first, then Intelephense |
+| `textDocument/hover` | PHPantom (fall back to Intelephense if null) |
+| `textDocument/signatureHelp` | PHPantom (fall back if no signatures) |
+| `textDocument/publishDiagnostics` | Merged per-URI from both servers |
+| Everything else | PHPantom wins immediately; Intelephense response discarded |
+
+The workspace is mounted **read-only** in all containers.
+
+---
+
+## Hooks
+
+All three plugins ship `hooks/hooks.json` with automatic quality gates:
+
+| Hook | Trigger | Action |
+|---|---|---|
+| `php-syntax-check` | PostToolUse (Write/Edit) | `php -l` on edited file (no-op if `php` not on PATH) |
+| `php-cs-fixer` | PostToolUse (Write/Edit) | `vendor/bin/php-cs-fixer fix` (no-op if not installed) |
+| `php-pre-commit-gate` | PreToolUse (git commit) | `phpstan` + `phpunit` blocking gate (no-op if not installed) |
+
+All hooks are silent no-ops when the tools are not present, so they work out of the box with no configuration.
 
 ---
 
@@ -104,7 +142,7 @@ Rebuild to pick up the latest commits from the `main` branch:
 docker build --no-cache -t claude-code-lsp-phpantom ./phpantom
 ```
 
-Or pin a specific tag by changing the `PHPANTOM_REF` build arg:
+Or pin a specific commit/tag with the `PHPANTOM_REF` build arg:
 
 ```bash
 docker build --no-cache --build-arg PHPANTOM_REF=0.4.0 -t claude-code-lsp-phpantom ./phpantom
@@ -119,7 +157,7 @@ docker build --no-cache --build-arg PHPANTOM_REF=0.4.0 -t claude-code-lsp-phpant
 The wrapper scripts must be executable. Run:
 
 ```bash
-chmod +x intelephense/bin/lsp-server.sh phpantom/bin/lsp-server.sh
+chmod +x intelephense/bin/lsp-server.sh phpantom/bin/lsp-server.sh combined/bin/lsp-server.sh
 ```
 
 ### "No LSP server available for file type: .php"
@@ -130,7 +168,7 @@ chmod +x intelephense/bin/lsp-server.sh phpantom/bin/lsp-server.sh
 
 ### PHPantom build fails
 
-PHPantom requires a network-connected Docker build to clone the source repo. Check your Docker network settings. Alternatively, build manually:
+PHPantom clones and compiles from source at build time and requires a network-connected Docker daemon. Check your Docker network settings. Alternatively, build manually:
 
 ```bash
 cd phpantom && docker build -t claude-code-lsp-phpantom .
@@ -138,7 +176,7 @@ cd phpantom && docker build -t claude-code-lsp-phpantom .
 
 ### Intelephense cross-file completions not working
 
-Intelephense needs the project's Composer autoloader. Run `composer install` in your project root so the LSP can find all classes.
+Intelephense needs the project's Composer autoloader. Run `composer install` in your project root so the LSP can resolve all classes.
 
 ---
 
@@ -147,20 +185,35 @@ Intelephense needs the project's Composer autoloader. Run `composer install` in 
 ```text
 php-lsp-docker-claude-code/
 ├── .claude-plugin/
-│   └── marketplace.json        # Claude Code marketplace definition
+│   └── marketplace.json          # Claude Code marketplace definition
+├── .github/
+│   ├── scripts/
+│   │   ├── fixtures/test.php     # PHP fixture for functional CI tests
+│   │   ├── lsp_smoke_test.py     # initialize smoke test (all 3 plugins)
+│   │   └── lsp_functional_test.py# completion + hover functional tests
+│   └── workflows/ci.yml          # Validate → build → smoke → functional
 ├── intelephense/
-│   ├── .lsp.json               # Claude Code LSP plugin config
-│   ├── plugin.json             # Plugin manifest
-│   ├── Dockerfile              # node:22-slim + intelephense npm package
-│   └── bin/
-│       └── lsp-server.sh       # Wrapper script (auto-builds + docker run)
+│   ├── .lsp.json                 # Claude Code LSP plugin config
+│   ├── plugin.json               # Plugin manifest
+│   ├── Dockerfile                # node:22-slim + intelephense npm package
+│   ├── hooks/hooks.json          # PostToolUse + PreToolUse PHP hooks
+│   └── bin/lsp-server.sh         # Wrapper (auto-builds + docker run)
 ├── phpantom/
-│   ├── .lsp.json               # Claude Code LSP plugin config
-│   ├── plugin.json             # Plugin manifest
-│   ├── Dockerfile              # Rust builder + slim runtime
+│   ├── .lsp.json                 # Claude Code LSP plugin config
+│   ├── plugin.json               # Plugin manifest
+│   ├── Dockerfile                # Rust builder + slim runtime
+│   ├── hooks/hooks.json          # PostToolUse + PreToolUse PHP hooks
+│   └── bin/lsp-server.sh         # Wrapper (auto-builds + docker run)
+├── combined/
+│   ├── .lsp.json                 # Claude Code LSP plugin config
+│   ├── plugin.json               # Plugin manifest
+│   ├── intelephense/Dockerfile   # Intelephense image (self-contained copy)
+│   ├── phpantom/Dockerfile       # PHPantom image (self-contained copy)
+│   ├── hooks/hooks.json          # PostToolUse + PreToolUse PHP hooks
 │   └── bin/
-│       └── lsp-server.sh       # Wrapper script (auto-builds + docker run)
-├── setup.sh                    # One-time setup helper
+│       ├── lsp-server.sh         # Entry point (exec lsp-multiplexer.py)
+│       └── lsp-multiplexer.py    # Python LSP fan-out + merge engine
+├── setup.sh                      # One-time setup helper
 └── README.md
 ```
 
